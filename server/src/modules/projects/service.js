@@ -12,6 +12,48 @@ function money(value) {
   return Math.round(value * 100) / 100;
 }
 
+function priceOrder(a, b) {
+  return (Number(a.price) || 0) - (Number(b.price) || 0)
+    || String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+}
+
+export function itemId(item) {
+  return String((item && (item.id || item._id)) || '');
+}
+
+export function setNumberOf(item) {
+  const value = Number(item && item.setNumber);
+  return value === 2 || value === 3 ? value : 1;
+}
+
+export function setSequence(projects, premiums = []) {
+  const list = projects
+    .filter((project) => project.projectType !== 'premium')
+    .slice()
+    .sort(priceOrder);
+  const inserts = premiums.slice().sort((a, b) => (
+    (Number(a.position) || 0) - (Number(b.position) || 0)
+    || String(a.createdAt || '').localeCompare(String(b.createdAt || ''))
+  ));
+  inserts.forEach((premium) => {
+    const at = Math.max(0, (Number(premium.position) || (list.length + 1)) - 1);
+    list.splice(Math.min(at, list.length), 0, premium);
+  });
+  return list;
+}
+
+export function nextGroupProject(projects, premiums, doneIds) {
+  for (const setNumber of [1, 2, 3]) {
+    const sequence = setSequence(
+      projects.filter((project) => setNumberOf(project) === setNumber),
+      premiums.filter((premium) => setNumberOf(premium) === setNumber),
+    );
+    const next = sequence.find((item) => !doneIds.has(itemId(item)));
+    if (next) return next;
+  }
+  return null;
+}
+
 async function groupNames(projects) {
   const ids = [...new Set(projects.map((project) => project.groupId).filter(Boolean))];
   const groups = await ProjectGroup.find({ _id: { $in: ids } });
@@ -36,6 +78,8 @@ async function readProject(body, current) {
   if (!Number.isFinite(commissionRatio) || commissionRatio < 0 || commissionRatio > 100) {
     return { status: 400, message: 'Commission ratio must be between 0 and 100.' };
   }
+  const rawSet = body && body.setNumber !== undefined ? body.setNumber : current && current.setNumber;
+  const setNumber = Number(rawSet) === 2 || Number(rawSet) === 3 ? Number(rawSet) : 1;
 
   return {
     value: {
@@ -44,6 +88,8 @@ async function readProject(body, current) {
       price: money(price),
       commissionRatio: money(commissionRatio),
       commissionAmount: money((price * commissionRatio) / 100),
+      projectType: 'normal',
+      setNumber,
     },
   };
 }
@@ -59,7 +105,7 @@ export async function listProjects({ groupId }) {
     if (!mongoose.isValidObjectId(groupId)) return { status: 200, data: { projects: [] } };
     filter.groupId = groupId;
   }
-  const rows = await Project.find(filter).sort({ createdAt: -1 });
+  const rows = await Project.find(filter).sort({ setNumber: 1, price: 1, createdAt: 1 });
   return { status: 200, data: { projects: presentList(rows, await groupNames(rows)) } };
 }
 

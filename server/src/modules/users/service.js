@@ -1,7 +1,14 @@
 import mongoose from 'mongoose';
 import { revokeUserSessions } from '../auth/session.js';
+import { ProjectGroup } from '../groups/model.js';
 import { User } from './model.js';
 import { Transaction } from '../wallet/model.js';
+import { Order } from '../orders/model.js';
+import { Project } from '../projects/model.js';
+import { nextGroupProject } from '../projects/service.js';
+import { UserPremium } from './premium-model.js';
+import { orderWorkDate } from '../../lib/workDate.js';
+import { ensureDailyReset } from './daily.js';
 
 function digits(value) {
   return String(value || '').replace(/\D/g, '');
@@ -19,7 +26,10 @@ function viewUser(user, extra = {}) {
     accountStatus: user.accountStatus,
     walletBalance: user.walletBalance,
     trialBalance: user.trialBalance || 0,
+    holdBalance: user.holdBalance || 0,
+    holdGroupId: user.holdGroupId || '',
     pendingCashOut: user.pendingCashOut,
+    unlockedGroupIds: [],
     createdAt: user.createdAt ? new Date(user.createdAt).toISOString() : '',
     ...extra,
   };
@@ -32,6 +42,16 @@ async function findMember(id) {
   return user;
 }
 
+export async function openGroupIds(user) {
+  if (!user || user.role === 'admin') return [];
+  if (user.groupAccessSet) return (user.unlockedGroupIds || []).map(String);
+  const trial = await ProjectGroup.findOne({ isTrial: true }).select('_id');
+  if (!trial) return [];
+  const id = String(trial._id);
+  if ((user.lockedGroupIds || []).map(String).includes(id)) return [];
+  return [id];
+}
+
 async function decorate(users) {
   const ids = users.map((user) => String(user._id));
   const referrers = await User.find({ _id: { $in: users.map((user) => user.referredBy).filter(Boolean) } });
@@ -41,10 +61,15 @@ async function decorate(users) {
   referred.forEach((user) => {
     counts.set(user.referredBy, (counts.get(user.referredBy) || 0) + 1);
   });
-  return users.map((user) => viewUser(user, {
-    referredByName: user.referredBy ? (referrerName.get(user.referredBy) || '') : '',
-    referralCount: counts.get(String(user._id)) || 0,
-  }));
+  const views = [];
+  for (const user of users) {
+    views.push(viewUser(user, {
+      referredByName: user.referredBy ? (referrerName.get(user.referredBy) || '') : '',
+      referralCount: counts.get(String(user._id)) || 0,
+      unlockedGroupIds: await openGroupIds(user),
+    }));
+  }
+  return views;
 }
 
 export async function listMembers({ status, q }) {
@@ -55,12 +80,14 @@ export async function listMembers({ status, q }) {
   if (query) {
     rows = rows.filter((user) => `${user.fullName} ${user.mobile} ${user.referralCode}`.toLowerCase().includes(query));
   }
+  for (const user of rows) await ensureDailyReset(user);
   return { status: 200, data: { users: await decorate(rows) } };
 }
 
 export async function getMember(id) {
   const user = await findMember(id);
   if (!user) return { status: 404, message: 'User not found.' };
+  await ensureDailyReset(user);
   const [view] = await decorate([user]);
   return { status: 200, data: { user: view } };
 }
@@ -102,6 +129,92 @@ export async function adjustMemberWallet(id, { amount, reason }) {
   });
   const [view] = await decorate([user]);
   return { status: 200, data: { user: view } };
+}
+
+export async function setMemberGroups(id, groupIds) {
+  const user = await findMember(id);
+  if (!user) return { status: 404, message: 'User not found.' };
+  await ensureDailyReset(user);
+  if (!Array.isArray(groupIds)) return { status: 400, message: 'Choose the open groups.' };
+  const ids = [...new Set(groupIds.map(String))];
+  if (ids.some((groupId) => !mongoose.isValidObjectId(groupId))) {
+    return { status: 400, message: 'Choose a valid group.' };
+  }
+  const found = ids.length ? await ProjectGroup.find({ _id: { $in: ids } }).select('_id') : [];
+  if (found.length !== ids.length) return { status: 400, message: 'Choose a valid group.' };
+  user.groupAccessSet = true;
+  user.unlockedGroupIds = found.map((group) => String(group._id));
+  user.lockedGroupIds = [];
+  await user.save();
+  const [view] = await decorate([user]);
+  return { status: 200, data: { user: view } };
+}
+
+export async function memberDailyHistory(id) {
+  const user = await findMember(id);
+  if (!user) return { status: 404, message: 'User not found.' };
+  const orders = await Order.find({ userId: String(user._id), status: { $ne: 'cancelled' } })
+    .select('-image.data')
+    .sort({ createdAt: 1 });
+  const groupIds = [...new Set(orders.map((order) => order.groupId).filter(Boolean))];
+  const [groupRows, projectRows, premiumRows] = await Promise.all([
+    groupIds.length ? ProjectGroup.find({ _id: { $in: groupIds } }).select('name') : [],
+    groupIds.length ? Project.find({ groupId: { $in: groupIds } }).select('name price projectType setNumber groupId createdAt') : [],
+    groupIds.length ? UserPremium.find({ userId: String(user._id), groupId: { $in: groupIds } }) : [],
+  ]);
+  const groupName = new Map(groupRows.map((group) => [String(group._id), group.name]));
+  const projectsByGroup = new Map();
+  projectRows.forEach((project) => {
+    const key = String(project.groupId);
+    const list = projectsByGroup.get(key) || [];
+    list.push(project);
+    projectsByGroup.set(key, list);
+  });
+
+  const byDay = new Map();
+  orders.forEach((order) => {
+    const date = orderWorkDate(order) || 'Unknown';
+    const day = byDay.get(date) || new Map();
+    const key = order.groupId || 'none';
+    const list = day.get(key) || [];
+    list.push(order);
+    day.set(key, list);
+    byDay.set(date, day);
+  });
+
+  const days = [...byDay.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, groups]) => ({
+      date,
+      groups: [...groups.entries()].map(([groupId, rows]) => {
+        const projects = projectsByGroup.get(groupId) || [];
+        const premiums = premiumRows.filter((row) => String(row.groupId) === groupId);
+        const done = new Set(rows.map((order) => String(order.projectId)));
+        const next = nextGroupProject(projects, premiums, done);
+        const total = projects.length + premiums.length;
+        const commission = rows.reduce((sum, order) => sum + (Number(order.commissionAmount) || Number(order.earnedCommission) || 0), 0);
+        const spent = rows.reduce((sum, order) => sum + (Number(order.price) || 0), 0);
+        return {
+          groupId,
+          groupName: groupName.get(groupId) || rows[0].groupName || 'Group',
+          completed: done.size,
+          total: total || done.size,
+          finished: !next && total > 0 && done.size >= total,
+          stoppedAt: next ? next.name : '',
+          spent: Math.round(spent * 100) / 100,
+          commission: Math.round(commission * 100) / 100,
+          orders: rows.map((order) => ({
+            id: String(order._id),
+            projectName: order.projectName,
+            price: Number(order.price) || 0,
+            commissionAmount: Number(order.commissionAmount) || Number(order.earnedCommission) || 0,
+            createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : '',
+          })),
+        };
+      }),
+    }));
+
+  return { status: 200, data: { days } };
 }
 
 export async function updateOwnProfile(session, { fullName, mobile }) {

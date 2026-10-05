@@ -157,7 +157,10 @@ const Admin = (() => {
               <td>${esc(u.fullName)}</td><td>${esc(u.mobile)}</td><td>${esc(u.referralCode)}</td>
               <td>${Store.money(u.walletBalance)}</td><td>${Store.money(u.pendingCashOut)}</td>
               <td>${badge(u.accountStatus)}</td>
-              <td><button class="btn light" type="button" data-action="user" data-id="${esc(u.id)}">Manage</button></td>
+              <td class="row-actions">
+                <button class="icon-btn" type="button" data-action="user-history" data-id="${esc(u.id)}" data-name="${esc(u.fullName)}" aria-label="Daily history"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l2.5 1.5"/></svg></button>
+                <button class="btn light" type="button" data-action="user" data-id="${esc(u.id)}">Manage</button>
+              </td>
             </tr>`).join('') : `<tr><td colspan="7">${emptyState('users', directory.length ? 'No users match' : 'No members yet', directory.length ? 'Try a different name, mobile, or status.' : 'Accounts appear here after someone signs up.')}</td></tr>`}
           </tbody>
         </table></div>
@@ -177,6 +180,325 @@ const Admin = (() => {
     }
   }
 
+  function groupLockLabel(user) {
+    const open = new Set(Array.isArray(user.unlockedGroupIds) ? user.unlockedGroupIds : []);
+    const names = groups.filter((group) => !open.has(group.id)).map((group) => group.name);
+    if (!names.length) return 'None locked';
+    if (names.length <= 2) return names.join(', ');
+    return `${names.length} groups locked`;
+  }
+
+  function bindGroupPicker(userId) {
+    const picker = document.querySelector('.group-picker');
+    if (!picker) return;
+    const btn = picker.querySelector('.picker-btn');
+    const menu = picker.querySelector('.group-menu');
+    const label = picker.querySelector('.picker-label');
+    const place = () => {
+      const rect = btn.getBoundingClientRect();
+      menu.hidden = false;
+      menu.style.width = `${rect.width}px`;
+      const height = menu.offsetHeight;
+      const below = window.innerHeight - rect.bottom;
+      const top = below < height + 12 && rect.top > height + 12 ? rect.top - height - 6 : rect.bottom + 6;
+      menu.style.top = `${top}px`;
+      menu.style.left = `${Math.max(8, rect.left)}px`;
+    };
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (menu.hidden) {
+        place();
+        btn.setAttribute('aria-expanded', 'true');
+      } else {
+        menu.hidden = true;
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+    menu.addEventListener('change', async () => {
+      const lockedIds = new Set([...menu.querySelectorAll('input:checked')].map((input) => input.value));
+      const groupIds = groups.filter((group) => !lockedIds.has(group.id)).map((group) => group.id);
+      const previous = directory.find((row) => row.id === userId);
+      label.textContent = groupLockLabel({ unlockedGroupIds: groupIds });
+      try {
+        const data = await adminApi(`/api/users/${encodeURIComponent(userId)}/groups`, {
+          method: 'PATCH',
+          body: { groupIds },
+        });
+        if (data.user) directory = directory.map((row) => (row.id === data.user.id ? data.user : row));
+        toast('Groups updated');
+      } catch (err) {
+        if (previous) {
+          const open = new Set(Array.isArray(previous.unlockedGroupIds) ? previous.unlockedGroupIds : []);
+          menu.querySelectorAll('input').forEach((input) => {
+            input.checked = !open.has(input.value);
+          });
+          label.textContent = groupLockLabel(previous);
+        }
+        toast(err.message);
+      }
+    });
+    if (!bindGroupPicker.bound) {
+      bindGroupPicker.bound = true;
+      document.addEventListener('click', (event) => {
+        if (event.target.closest('.group-picker')) return;
+        document.querySelectorAll('.group-menu').forEach((node) => { node.hidden = true; });
+        document.querySelectorAll('.group-picker .picker-btn').forEach((node) => node.setAttribute('aria-expanded', 'false'));
+      });
+    }
+  }
+
+  function historyClock(iso) {
+    if (!iso) return '';
+    const when = new Date(iso);
+    if (Number.isNaN(when.getTime())) return '';
+    return when.toLocaleTimeString('en-AE', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Dubai' });
+  }
+
+  function historyDayView(day) {
+    if (!day) return '<p class="muted">No orders on this day.</p>';
+    const groups = day.groups || [];
+    const orders = groups.flatMap((group) => group.orders || []);
+    const spentOf = (group) => (group.orders || []).reduce((sum, order) => sum + (Number(order.price) || 0), 0);
+    const earnedOf = (group) => (group.orders || []).reduce((sum, order) => sum + (Number(order.commissionAmount) || 0), 0);
+    const spent = groups.reduce((sum, group) => sum + (Number.isFinite(Number(group.spent)) ? Number(group.spent) : spentOf(group)), 0);
+    const commission = groups.reduce((sum, group) => sum + (Number.isFinite(Number(group.commission)) ? Number(group.commission) : earnedOf(group)), 0);
+    return `
+      <dl class="stack-stats history-totals">
+        <div class="stack-row"><span>Projects completed</span><b>${orders.length}</b></div>
+        <div class="stack-row"><span>Price bought</span><b>${Store.money(spent)}</b></div>
+        <div class="stack-row"><span>Commission earned</span><b>${Store.money(commission)}</b></div>
+      </dl>
+      ${groups.map((group) => `
+        <article class="history-group">
+          <div class="history-meta">
+            <b>${esc(group.groupName)}</b>
+            <span>${group.completed} of ${group.total}</span>
+          </div>
+          <p class="history-stop">${group.finished ? 'Finished this group' : `Stopped before ${esc(group.stoppedAt || 'the next project')}`}</p>
+          <dl class="stack-stats">
+            <div class="stack-row"><span>Price bought</span><b>${Store.money(Number.isFinite(Number(group.spent)) ? group.spent : spentOf(group))}</b></div>
+            <div class="stack-row"><span>Commission earned</span><b>${Store.money(Number.isFinite(Number(group.commission)) ? group.commission : earnedOf(group))}</b></div>
+          </dl>
+          <ul class="history-orders">
+            ${(group.orders || []).map((order) => `
+              <li>
+                <span><b>${esc(order.projectName)}</b><small>${esc(historyClock(order.createdAt))}</small></span>
+                <span class="history-figures"><span>Bought ${Store.money(order.price)}</span><span>Earned ${Store.money(order.commissionAmount)}</span></span>
+              </li>`).join('')}
+          </ul>
+        </article>`).join('')}`;
+  }
+
+  async function openUserHistory(id, name) {
+    openModal(`<h3>Daily history</h3><p class="muted">${esc(name || 'User')}</p><p class="muted">Loading…</p>`);
+    try {
+      const data = await adminApi(`/api/users/${encodeURIComponent(id)}/history`);
+      const days = Array.isArray(data.days) ? data.days : [];
+      const byDate = new Map(days.map((day) => [day.date, day]));
+      const latest = days[0] ? days[0].date : '';
+      const earliest = days.length ? days[days.length - 1].date : '';
+      openModal(`
+        <h3>Daily history</h3>
+        <p class="muted">${esc(name || 'User')}</p>
+        <label class="field history-date" for="history-date">Date</label>
+        <input id="history-date" type="date" value="${esc(latest)}" ${earliest ? `min="${esc(earliest)}" max="${esc(latest)}"` : ''}>
+        <div id="history-body"></div>
+        <div class="modal-actions"><button class="btn light" type="button" data-dismiss>Close</button></div>`);
+      const input = document.getElementById('history-date');
+      const body = document.getElementById('history-body');
+      const paint = () => {
+        if (!body) return;
+        body.innerHTML = days.length ? historyDayView(byDate.get(input.value)) : '<p class="muted">No orders yet.</p>';
+      };
+      if (input) input.addEventListener('change', paint);
+      paint();
+    } catch (error) {
+      openModal(`<h3>Daily history</h3><p>${esc(error.message)}</p><div class="modal-actions"><button class="btn light" type="button" data-dismiss>Close</button></div>`);
+    }
+  }
+
+  function bindManageTabs(userId) {
+    let groupId = '';
+    let editing = '';
+    let setNumber = 1;
+    let mode = 'premium';
+    let reward = 'cash';
+    const account = document.getElementById('manage-account');
+    const premium = document.getElementById('manage-premium');
+    const form = document.getElementById('premium-form');
+    const meta = document.getElementById('premium-meta');
+    const list = document.getElementById('premium-list');
+    const err = document.getElementById('prem-error');
+    document.querySelectorAll('[data-manage-tab]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const on = button.dataset.manageTab === 'premium';
+        account.hidden = on;
+        premium.hidden = !on;
+        document.querySelectorAll('[data-manage-tab]').forEach((item) => {
+          const active = item === button;
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+      });
+    });
+    document.querySelectorAll('[data-premium-set]').forEach((button) => {
+      button.addEventListener('click', () => {
+        setNumber = Number(button.dataset.premiumSet) || 1;
+        document.querySelectorAll('[data-premium-set]').forEach((item) => {
+          item.classList.toggle('active', item === button);
+        });
+      });
+    });
+    const paintSets = () => {
+      document.querySelectorAll('[data-premium-set]').forEach((item) => {
+        item.classList.toggle('active', Number(item.dataset.premiumSet) === setNumber);
+      });
+    };
+    const paintKind = () => {
+      const fortune = mode === 'fortune';
+      const cash = fortune && reward === 'cash';
+      document.querySelectorAll('[data-prem-kind]').forEach((item) => {
+        item.classList.toggle('active', item.dataset.premKind === mode);
+      });
+      document.querySelectorAll('[data-prem-reward]').forEach((item) => {
+        item.classList.toggle('active', item.dataset.premReward === reward);
+      });
+      const rewardWrap = document.getElementById('prem-reward-wrap');
+      const nameWrap = document.getElementById('prem-name-wrap');
+      const ratioWrap = document.getElementById('prem-ratio-wrap');
+      if (rewardWrap) rewardWrap.hidden = !fortune;
+      if (nameWrap) nameWrap.hidden = cash;
+      if (ratioWrap) ratioWrap.hidden = cash;
+      const priceLabel = document.querySelector('label[for="prem-price"]');
+      if (priceLabel) priceLabel.textContent = cash ? 'Amount (AED)' : 'Price (AED)';
+      const save = document.getElementById('prem-save');
+      if (save) save.textContent = editing
+        ? (fortune ? 'Save fortune box' : 'Save premium')
+        : (fortune ? 'Add fortune box' : 'Add premium');
+    };
+    document.querySelectorAll('[data-prem-kind]').forEach((button) => {
+      button.addEventListener('click', () => {
+        mode = button.dataset.premKind === 'fortune' ? 'fortune' : 'premium';
+        paintKind();
+      });
+    });
+    document.querySelectorAll('[data-prem-reward]').forEach((button) => {
+      button.addEventListener('click', () => {
+        reward = button.dataset.premReward === 'project' ? 'project' : 'cash';
+        paintKind();
+      });
+    });
+    function premiumNote(row) {
+      if (row.kind === 'fortune' && row.reward === 'cash') {
+        return `Fortune box · Cash · Set ${row.setNumber} · Position ${row.position} · ${Store.money(row.price)}`;
+      }
+      if (row.kind === 'fortune') {
+        return `Fortune box · Set ${row.setNumber} · Position ${row.position} · ${Store.money(row.price)} · ${esc(row.commissionRatio)}%`;
+      }
+      return `Set ${row.setNumber} · Position ${row.position} · ${Store.money(row.price)} · ${esc(row.commissionRatio)}%`;
+    }
+    async function load(nextGroup) {
+      groupId = nextGroup;
+      editing = '';
+      mode = 'premium';
+      reward = 'cash';
+      paintKind();
+      document.querySelectorAll('[data-premium-group]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.premiumGroup === groupId);
+      });
+      const group = groups.find((item) => item.id === groupId);
+      meta.textContent = group ? `${group.projectCount} projects · 3 sets` : '';
+      form.hidden = false;
+      const data = await adminApi(`/api/users/${encodeURIComponent(userId)}/premiums?groupId=${encodeURIComponent(groupId)}`);
+      const rows = data.premiums || [];
+      list.innerHTML = rows.length ? rows.map((row) => `
+        <article class="premium-row">
+          <div>
+            <b>${esc(row.kind === 'fortune' && row.reward === 'cash' ? 'Cash reward' : row.name)}</b>
+            <small>${premiumNote(row)}</small>
+          </div>
+          <button class="btn light" type="button" data-premium-edit="${esc(row.id)}">Edit</button>
+          <button class="btn light" type="button" data-premium-remove="${esc(row.id)}">Remove</button>
+        </article>`).join('') : '<p class="muted">No premium or fortune box for this member in this group.</p>';
+      list.querySelectorAll('[data-premium-edit]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const row = rows.find((item) => item.id === button.dataset.premiumEdit);
+          if (!row) return;
+          editing = row.id;
+          mode = row.kind === 'fortune' ? 'fortune' : 'premium';
+          reward = row.reward === 'project' ? 'project' : 'cash';
+          setNumber = Number(row.setNumber) || 1;
+          document.getElementById('prem-position').value = row.position;
+          document.getElementById('prem-name').value = row.reward === 'cash' ? '' : row.name;
+          document.getElementById('prem-price').value = row.price;
+          document.getElementById('prem-ratio').value = row.commissionRatio;
+          paintSets();
+          paintKind();
+        });
+      });
+      list.querySelectorAll('[data-premium-remove]').forEach((button) => {
+        button.addEventListener('click', () => {
+          adminApi(`/api/users/${encodeURIComponent(userId)}/premiums/${encodeURIComponent(button.dataset.premiumRemove)}`, { method: 'DELETE' })
+            .then(() => {
+              toast('Premium removed');
+              return load(groupId);
+            })
+            .catch((error) => toast(error.message));
+        });
+      });
+    }
+    document.querySelectorAll('[data-premium-group]').forEach((button) => {
+      button.addEventListener('click', () => {
+        load(button.dataset.premiumGroup).catch((error) => toast(error.message));
+      });
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.hidden = true;
+      if (!groupId) {
+        err.hidden = false;
+        err.textContent = 'Choose a group.';
+        return;
+      }
+      const cash = mode === 'fortune' && reward === 'cash';
+      const payload = {
+        groupId,
+        setNumber,
+        position: Number(document.getElementById('prem-position').value),
+        name: cash ? 'Cash reward' : document.getElementById('prem-name').value.trim(),
+        price: document.getElementById('prem-price').value,
+        commissionRatio: cash ? 0 : document.getElementById('prem-ratio').value,
+        kind: mode,
+        reward: mode === 'fortune' ? reward : 'project',
+      };
+      const fortune = mode === 'fortune';
+      try {
+        if (editing) {
+          await adminApi(`/api/users/${encodeURIComponent(userId)}/premiums/${encodeURIComponent(editing)}`, { method: 'PATCH', body: payload });
+          toast(fortune ? 'Fortune box updated' : 'Premium updated');
+        } else {
+          await adminApi(`/api/users/${encodeURIComponent(userId)}/premiums`, { method: 'POST', body: payload });
+          toast(fortune ? 'Fortune box added' : 'Premium added');
+        }
+        editing = '';
+        mode = 'premium';
+        reward = 'cash';
+        document.getElementById('prem-name').value = '';
+        document.getElementById('prem-price').value = '';
+        document.getElementById('prem-ratio').value = '';
+        document.getElementById('prem-position').value = '1';
+        setNumber = 1;
+        paintSets();
+        paintKind();
+        await load(groupId);
+      } catch (error) {
+        err.hidden = false;
+        err.textContent = error.message;
+      }
+    });
+  }
+
   function openUser(id) {
     const u = directory.find((x) => x.id === id);
     if (!u) return;
@@ -187,8 +509,14 @@ const Admin = (() => {
         <button class="icon-btn" type="button" data-action="user-sessions" data-id="${esc(u.id)}" data-name="${esc(u.fullName)}" aria-label="View sessions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
       </div>
       <p class="muted">${esc(u.mobile)} · ${esc(u.referralCode)}</p>
+      <div class="set-tabs manage-tabs" role="tablist" aria-label="Manage">
+        <button class="set-tab active" type="button" data-manage-tab="account" aria-selected="true">Account</button>
+        <button class="set-tab" type="button" data-manage-tab="premium" aria-selected="false">Premium</button>
+      </div>
+      <div id="manage-account">
       <dl class="stack-stats">
         <div class="stack-row"><span>Balance</span><b>${Store.money(u.walletBalance)}</b></div>
+        <div class="stack-row"><span>Hold balance</span><b>${Store.money(u.holdBalance)}</b></div>
         <div class="stack-row"><span>Trial balance</span><b>${Store.money(u.trialBalance)}</b></div>
         <div class="stack-row"><span>Pending cash out</span><b>${Store.money(u.pendingCashOut)}</b></div>
         <div class="stack-row"><span>Referred by</span><b>${byName ? esc(byName) : '—'}</b></div>
@@ -203,6 +531,22 @@ const Admin = (() => {
           <option value="suspended"${u.accountStatus === 'suspended' ? ' selected' : ''}>Suspended</option>
         </select>
       </div>
+      <div class="field group-locks">
+        <span class="field-label" id="group-lock-label">Locked groups</span>
+        ${groups.length ? `
+          <div class="group-picker">
+            <button class="picker-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="group-lock-label">
+              <span class="picker-label">${esc(groupLockLabel(u))}</span>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="group-menu" role="group" aria-label="Locked groups" hidden>
+              ${groups.map((group) => {
+                const open = Array.isArray(u.unlockedGroupIds) && u.unlockedGroupIds.includes(group.id);
+                return `<label class="group-option"><input type="checkbox" value="${esc(group.id)}"${open ? '' : ' checked'}><span>${esc(group.name)}</span></label>`;
+              }).join('')}
+            </div>
+          </div>` : '<p class="muted">No groups yet.</p>'}
+      </div>
       <form id="adjust-form" class="fields" style="margin-top:14px">
         <div class="form-2">
           <div class="field"><label for="adj-amount">Adjust amount (+ / −)</label><input id="adj-amount" type="number" step="1"></div>
@@ -212,7 +556,54 @@ const Admin = (() => {
           <button class="btn light" type="button" data-dismiss>Close</button>
           <button class="btn primary" type="submit">Apply adjustment</button>
         </div>
-      </form>`);
+      </form>
+      </div>
+      <div id="manage-premium" hidden>
+        <div class="premium-groups" id="premium-groups">
+          ${groups.map((group) => `<button class="chip" type="button" data-premium-group="${esc(group.id)}">${esc(group.name)}</button>`).join('') || '<p class="muted">No groups yet.</p>'}
+        </div>
+        <p class="muted" id="premium-meta"></p>
+        <form id="premium-form" class="fields" hidden>
+          <div class="field">
+            <span class="field-label">Add</span>
+            <div class="type-picks" id="prem-kind">
+              <button class="chip active" type="button" data-prem-kind="premium">Premium project</button>
+              <button class="chip" type="button" data-prem-kind="fortune">Fortune box</button>
+            </div>
+          </div>
+          <div class="field" id="prem-reward-wrap" hidden>
+            <span class="field-label">Inside the box</span>
+            <div class="type-picks">
+              <button class="chip active" type="button" data-prem-reward="cash">Cash</button>
+              <button class="chip" type="button" data-prem-reward="project">Premium project</button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="field-label">Set</span>
+            <div class="type-picks" id="premium-sets">
+              <button class="chip active" type="button" data-premium-set="1">Set 1</button>
+              <button class="chip" type="button" data-premium-set="2">Set 2</button>
+              <button class="chip" type="button" data-premium-set="3">Set 3</button>
+            </div>
+          </div>
+          <div class="form-2">
+            <div class="field"><label for="prem-position">Position</label><input id="prem-position" type="number" min="1" step="1" value="1"></div>
+            <div class="field" id="prem-name-wrap"><label for="prem-name">Name</label><input id="prem-name"></div>
+          </div>
+          <div class="form-2">
+            <div class="field"><label for="prem-price">Price (AED)</label><input id="prem-price" type="number" min="0" step="0.01"></div>
+            <div class="field" id="prem-ratio-wrap"><label for="prem-ratio">Commission ratio (%)</label><input id="prem-ratio" type="number" min="0" max="100" step="0.01"></div>
+          </div>
+          <p class="field-error" id="prem-error" role="alert" hidden></p>
+          <div class="modal-actions">
+            <button class="btn light" type="button" data-dismiss>Close</button>
+            <button class="btn primary" type="submit" id="prem-save">Add premium</button>
+          </div>
+        </form>
+        <div id="premium-list"></div>
+      </div>`);
+    bindGroupPicker(id);
+    bindManageTabs(id);
     document.getElementById('adjust-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const accountStatus = document.getElementById('user-status').value;
@@ -307,7 +698,7 @@ const Admin = (() => {
       adminApi('/api/groups'),
     ]);
     catalog = projectData.projects || [];
-    groups = groupData.groups || [];
+    groups = (groupData.groups || []).sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
   }
 
   function renderProjects() {
@@ -345,9 +736,10 @@ const Admin = (() => {
       return;
     }
     const group = groups.find((item) => item.id === groupId);
+    const setNumber = currentSet();
     const list = catalog
-      .filter((project) => project.groupId === groupId)
-      .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+      .filter((project) => project.groupId === groupId && setNumberOf(project) === setNumber)
+      .sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
     setBreadcrumb([
       { href: 'dashboard.html', label: 'Admin' },
       { href: 'projects.html', label: 'Projects' },
@@ -360,6 +752,12 @@ const Admin = (() => {
           <h2 class="serif">${esc(group ? group.name : 'Group')}</h2>
         </div>
         <button class="btn primary" type="button" data-action="edit-project">New project</button>
+      </div>
+      <div class="set-tabs" role="tablist" aria-label="Sets">
+        ${[1, 2, 3].map((number) => {
+          const count = catalog.filter((project) => project.groupId === groupId && setNumberOf(project) === number).length;
+          return `<a class="set-tab${number === setNumber ? ' active' : ''}" role="tab" aria-selected="${number === setNumber}" href="projects.html?group=${esc(groupId)}&set=${number}">Set ${number}<small>${count}</small></a>`;
+        }).join('')}
       </div>
       ${list.length ? `<div class="admin-project-grid">
         ${list.map((p) => `
@@ -474,17 +872,34 @@ const Admin = (() => {
     });
   }
 
+  function currentSet() {
+    const value = Number(new URLSearchParams(location.search).get('set'));
+    return value === 2 || value === 3 ? value : 1;
+  }
+
+  function setNumberOf(project) {
+    const value = Number(project && project.setNumber);
+    return value === 2 || value === 3 ? value : 1;
+  }
+
   function editProject(id) {
     const groupId = currentGroupId();
     const found = id ? catalog.find((item) => item.id === id) : null;
     if (id && !found) return;
     const p = found || {
-      id: '', groupId, name: '', price: '', commissionRatio: '',
+      id: '', groupId, name: '', price: '', commissionRatio: '', setNumber: currentSet(),
     };
+    const startingSet = setNumberOf(p);
     openModal(`
       <h3>${id ? 'Edit project' : 'New project'}</h3>
       <form id="proj-form" class="fields">
         <div class="field"><label for="pj-name">Name</label><input id="pj-name" value="${esc(p.name)}" required></div>
+        <div class="field">
+          <span class="field-label" id="pj-set-label">Set</span>
+          <div class="type-picks" role="radiogroup" aria-labelledby="pj-set-label">
+            ${[1, 2, 3].map((number) => `<button class="chip${startingSet === number ? ' active' : ''}" type="button" data-set-number="${number}" aria-pressed="${startingSet === number ? 'true' : 'false'}">Set ${number}</button>`).join('')}
+          </div>
+        </div>
         <div class="field"><label for="pj-price">Price (AED)</label><input id="pj-price" type="number" min="0" step="0.01" value="${p.price === '' ? '' : p.price}"></div>
         <div class="field"><label for="pj-ratio">Commission ratio (%)</label><input id="pj-ratio" type="number" min="0" max="100" step="0.01" value="${p.commissionRatio === '' ? '' : p.commissionRatio}"></div>
         <p class="muted" id="pj-total"></p>
@@ -503,6 +918,17 @@ const Admin = (() => {
     document.getElementById('pj-price').addEventListener('input', updateTotal);
     document.getElementById('pj-ratio').addEventListener('input', updateTotal);
     updateTotal();
+    let setNumber = startingSet;
+    document.querySelectorAll('[data-set-number]').forEach((button) => {
+      button.addEventListener('click', () => {
+        setNumber = Number(button.dataset.setNumber) || 1;
+        document.querySelectorAll('[data-set-number]').forEach((item) => {
+          const on = item === button;
+          item.classList.toggle('active', on);
+          item.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+      });
+    });
     const saveBtn = document.querySelector('#proj-form button[type="submit"]');
     document.getElementById('proj-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -525,6 +951,7 @@ const Admin = (() => {
         name: document.getElementById('pj-name').value.trim(),
         price,
         commissionRatio: ratio,
+        setNumber,
         status: 'active',
       };
       saveBtn.disabled = true;
@@ -644,6 +1071,8 @@ const Admin = (() => {
       minCashOutAmount: 500,
       supportTelegramUsername: '',
       demoCashInUSDTAddress: '',
+      bankPayoutEnabled: true,
+      cryptoPayoutEnabled: false,
     };
     pageEl().innerHTML = `
       <div class="page-head"><h2 class="serif">Settings</h2></div>
@@ -659,6 +1088,11 @@ const Admin = (() => {
           <div class="field"><label for="set-tg">Telegram username</label><input id="set-tg" value="${esc(s.supportTelegramUsername)}"></div>
           <div class="field"><label for="set-addr">Cash-in address</label><input id="set-addr" value="${esc(s.demoCashInUSDTAddress)}"></div>
         </div>
+        <fieldset class="payout-kinds">
+          <legend>Active payout accounts</legend>
+          <label class="check-line"><input id="set-bank" type="checkbox"${s.bankPayoutEnabled !== false ? ' checked' : ''}> Bank account</label>
+          <label class="check-line"><input id="set-crypto" type="checkbox"${s.cryptoPayoutEnabled === true ? ' checked' : ''}> Crypto</label>
+        </fieldset>
         <div class="settings-actions">
           <button class="btn primary" type="submit">Save settings</button>
         </div>
@@ -677,6 +1111,8 @@ const Admin = (() => {
             minCashOutAmount: document.getElementById('set-min').value,
             supportTelegramUsername: document.getElementById('set-tg').value.trim(),
             demoCashInUSDTAddress: document.getElementById('set-addr').value.trim(),
+            bankPayoutEnabled: document.getElementById('set-bank').checked,
+            cryptoPayoutEnabled: document.getElementById('set-crypto').checked,
           },
         });
         platform = data.settings;
@@ -709,8 +1145,9 @@ const Admin = (() => {
       if (page === 'dashboard' || page === 'projects') {
         catalog = (await adminApi('/api/projects?all=1')).projects || [];
       }
-      if (page === 'projects') {
-        groups = (await adminApi('/api/groups')).groups || [];
+      if (page === 'users' || page === 'projects') {
+        groups = ((await adminApi('/api/groups')).groups || [])
+          .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
       }
       if (page === 'referrals') {
         const data = await adminApi('/api/referrals/all');
@@ -754,6 +1191,7 @@ const Admin = (() => {
     if (!el || document.body.dataset.app !== 'admin') return;
     const action = el.dataset.action;
     if (action === 'user') openUser(el.dataset.id);
+    if (action === 'user-history') openUserHistory(el.dataset.id, el.dataset.name);
     if (action === 'user-sessions') openSessions(el.dataset.id, el.dataset.name);
     if (action === 'revoke-user-session') {
       adminApi(`/api/users/${encodeURIComponent(el.dataset.user)}/sessions/${encodeURIComponent(el.dataset.id)}`, { method: 'DELETE' })

@@ -7,6 +7,8 @@ const projectSchema = new mongoose.Schema(
     price: { type: Number, required: true },
     commissionRatio: { type: Number, required: true },
     commissionAmount: { type: Number, required: true },
+    projectType: { type: String, enum: ['normal', 'premium'], default: 'normal' },
+    setNumber: { type: Number, default: 1 },
   },
   { timestamps: true }
 );
@@ -22,6 +24,8 @@ export function viewProject(project, extra = {}) {
     price: project.price,
     commissionRatio: project.commissionRatio,
     commissionAmount: project.commissionAmount,
+    projectType: 'normal',
+    setNumber: Number(project.setNumber) === 2 || Number(project.setNumber) === 3 ? Number(project.setNumber) : 1,
     createdAt: project.createdAt ? new Date(project.createdAt).toISOString() : '',
   };
 }
