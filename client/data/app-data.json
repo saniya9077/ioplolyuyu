@@ -1,0 +1,73 @@
+{
+  "settings": {
+    "platformName": "PrimeSpace",
+    "currencySymbol": "AED",
+    "welcomeBonusAmount": 100,
+    "demoMode": true
+  },
+  "projects": [
+    {
+      "id": "premium",
+      "name": "Premium Project",
+      "tag": "Featured",
+      "status": "Available",
+      "activationAmount": 1000,
+      "dailyCommission": 10,
+      "durationDays": 30,
+      "totalCommission": 300,
+      "commissionFrequency": "daily",
+      "image": "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1600&q=85",
+      "description": "Curated high-reward project simulation with a 30-day commission cycle."
+    },
+    {
+      "id": "smart-gadget",
+      "name": "Smart Gadget Project",
+      "tag": "Popular",
+      "status": "Available",
+      "activationAmount": 2000,
+      "dailyCommission": 25,
+      "durationDays": 60,
+      "totalCommission": 1500,
+      "commissionFrequency": "daily",
+      "image": "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1200&q=85",
+      "description": "Mid-tier activation with stronger daily commission over 60 days."
+    },
+    {
+      "id": "lifestyle",
+      "name": "Lifestyle Project",
+      "tag": "Balanced",
+      "status": "Available",
+      "activationAmount": 1500,
+      "dailyCommission": 18,
+      "durationDays": 45,
+      "totalCommission": 810,
+      "commissionFrequency": "daily",
+      "image": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=85",
+      "description": "Balanced activation and daily return across a 45-day cycle."
+    },
+    {
+      "id": "premium-plus",
+      "name": "Premium Project Plus",
+      "tag": "Premium",
+      "status": "Available",
+      "activationAmount": 3000,
+      "dailyCommission": 40,
+      "durationDays": 90,
+      "totalCommission": 3600,
+      "commissionFrequency": "daily",
+      "image": "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=1200&q=85",
+      "description": "Longest cycle with the highest total commission in the demo catalog."
+    }
+  ],
+  "member": {
+    "name": "Alex Member",
+    "id": "usr_1001",
+    "mobile": "+91 98765 43210",
+    "referralCode": "ALEX82K",
+    "walletBalance": 1265,
+    "currency": "AED",
+    "activeProjects": 2,
+    "todayCommission": 35,
+    "totalCommission": 420
+  }
+}

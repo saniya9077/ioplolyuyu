@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Emirates Properties</title>
+  <meta name="description" content="Browse project groups, submit an order, and receive the project commission in your wallet.">
+
+  <link rel="icon" href="assets/logo-nobg.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="assets/css/global.css">
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div class="container nav">
+      <a class="brand" href="index.html" aria-label="Emirates Properties home">
+        <img class="brand-logo" src="assets/logo-nobg.png" alt="Emirates Properties">
+      </a>
+
+      <nav class="navlinks" aria-label="Primary navigation">
+        <a href="#projects">Projects</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#faq">FAQ</a>
+        <a href="about.html">About</a>
+        <a href="terms.html">Terms</a>
+      </nav>
+
+      <div class="nav-actions">
+        <a class="btn light" href="pages/login.html">Log in</a>
+        <a class="btn primary" href="pages/signup.html">Create account</a>
+        <button class="nav-menu-btn" id="nav-menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-nav">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+
+    <div class="mobile-nav" id="mobile-nav" hidden>
+      <a href="#projects">Projects</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#faq">FAQ</a>
+      <a href="about.html">About</a>
+      <a href="terms.html">Terms</a>
+      <div class="mobile-nav-actions">
+        <a class="btn light btn-full" href="pages/login.html">Log in</a>
+        <a class="btn primary btn-full" href="pages/signup.html">Create account</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Hero ──────────────────────────────────────────────── -->
+  <section class="hero" aria-label="Hero">
+    <div class="hero-bg"
+      style="background-image:url('https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1800&q=85')"
+      role="img" aria-label="Modern architecture exterior"></div>
+    <div class="hero-shade"></div>
+    <div class="hero-content container">
+      <div class="hero-copy reveal">
+        <p class="smallcaps">Project rewards</p>
+        <h1 class="serif">Find a project worth building your journey around.</h1>
+        <p class="hero-lead">Open a project group, submit an order, and the commission is added to your wallet.</p>
+
+        <div class="welcome-callout" aria-label="Welcome bonus">
+          <span class="welcome-callout-label">Welcome bonus</span>
+          <strong>AED 100 on signup</strong>
+        </div>
+
+        <div class="hero-ctas">
+          <a class="btn primary" href="pages/signup.html">Get Started</a>
+          <a class="btn light" href="#projects">View Projects</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── How It Works ──────────────────────────────────────── -->
+  <section class="section" id="how-it-works" aria-labelledby="how-heading">
+    <div class="container">
+      <div class="section-head">
+        <div>
+          <p class="smallcaps">Simple path</p>
+          <h2 id="how-heading" class="serif">How it works</h2>
+        </div>
+      </div>
+
+      <ol class="steps-grid">
+        <li class="step-card">
+          <span class="step-num">01</span>
+          <h3>Create Account</h3>
+          <p>Name, mobile, and password.</p>
+        </li>
+        <li class="step-card">
+          <span class="step-num">02</span>
+          <h3>Welcome Bonus</h3>
+          <p>AED 100 is added to your wallet.</p>
+        </li>
+        <li class="step-card">
+          <span class="step-num">03</span>
+          <h3>Choose a Project</h3>
+          <p>Open a group and compare price, ratio, and commission.</p>
+        </li>
+        <li class="step-card">
+          <span class="step-num">04</span>
+          <h3>Submit order</h3>
+          <p>Confirm the project. Each project can be ordered once.</p>
+        </li>
+        <li class="step-card">
+          <span class="step-num">05</span>
+          <h3>Commission</h3>
+          <p>The commission amount is added to your wallet.</p>
+        </li>
+        <li class="step-card">
+          <span class="step-num">06</span>
+          <h3>Wallet</h3>
+          <p>Balance, cash in, and cash out.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ── Featured Projects ──────────────────────────────────── -->
+  <section class="section section-muted" id="projects" aria-labelledby="projects-heading">
+    <div class="container">
+      <div class="section-head">
+        <div>
+          <p class="smallcaps">Featured collection</p>
+          <h2 id="projects-heading" class="serif">Projects</h2>
+        </div>
+      </div>
+
+      <div class="grid-4" id="property-grid">
+
+        <a class="card property-card" href="pages/project-details.html?id=premium" data-name="Premium Project" data-amount="1000" data-days="30">
+          <div class="property-img">
+            <img src="https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=800&q=80" alt="" loading="lazy" width="800" height="500">
+            <span class="prop-tag">Featured</span>
+          </div>
+          <div class="prop-body">
+            <div class="prop-meta"><span>30 days</span><span class="prop-status">Available</span></div>
+            <h3>Premium Project</h3>
+            <p class="prop-line">Dubai Marina, Dubai</p>
+            <p class="prop-line">Emaar Properties</p>
+            <dl class="prop-stats">
+              <div><dt>Activate</dt><dd>AED 1,000</dd></div>
+              <div><dt>Daily</dt><dd>AED 10</dd></div>
+              <div><dt>Total</dt><dd>AED 300</dd></div>
+            </dl>
+          </div>
+        </a>
+
+        <a class="card property-card" href="pages/project-details.html?id=smart-gadget" data-name="Smart Gadget Project" data-amount="2000" data-days="60">
+          <div class="property-img">
+            <img src="https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=800&q=80" alt="" loading="lazy" width="800" height="500">
+            <span class="prop-tag">Popular</span>
+          </div>
+          <div class="prop-body">
+            <div class="prop-meta"><span>60 days</span><span class="prop-status">Available</span></div>
+            <h3>Smart Gadget Project</h3>
+            <p class="prop-line">Business Bay, Dubai</p>
+            <p class="prop-line">DAMAC Properties</p>
+            <dl class="prop-stats">
+              <div><dt>Activate</dt><dd>AED 2,000</dd></div>
+              <div><dt>Daily</dt><dd>AED 25</dd></div>
+              <div><dt>Total</dt><dd>AED 1,500</dd></div>
+            </dl>
+          </div>
+        </a>
+
+        <a class="card property-card" href="pages/project-details.html?id=lifestyle" data-name="Lifestyle Project" data-amount="1500" data-days="45">
+          <div class="property-img">
+            <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80" alt="" loading="lazy" width="800" height="500">
+            <span class="prop-tag">Balanced</span>
+          </div>
+          <div class="prop-body">
+            <div class="prop-meta"><span>45 days</span><span class="prop-status">Available</span></div>
+            <h3>Lifestyle Project</h3>
+            <p class="prop-line">Palm Jumeirah, Dubai</p>
+            <p class="prop-line">Nakheel</p>
+            <dl class="prop-stats">
+              <div><dt>Activate</dt><dd>AED 1,500</dd></div>
+              <div><dt>Daily</dt><dd>AED 18</dd></div>
+              <div><dt>Total</dt><dd>AED 810</dd></div>
+            </dl>
+          </div>
+        </a>
+
+        <a class="card property-card" href="pages/project-details.html?id=premium-plus" data-name="Premium Project Plus" data-amount="3000" data-days="90">
+          <div class="property-img">
+            <img src="https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=800&q=80" alt="" loading="lazy" width="800" height="500">
+            <span class="prop-tag">Premium</span>
+          </div>
+          <div class="prop-body">
+            <div class="prop-meta"><span>90 days</span><span class="prop-status">Available</span></div>
+            <h3>Premium Project Plus</h3>
+            <p class="prop-line">Downtown Dubai</p>
+            <p class="prop-line">Emaar Properties</p>
+            <dl class="prop-stats">
+              <div><dt>Activate</dt><dd>AED 3,000</dd></div>
+              <div><dt>Daily</dt><dd>AED 40</dd></div>
+              <div><dt>Total</dt><dd>AED 3,600</dd></div>
+            </dl>
+          </div>
+        </a>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── FAQ ───────────────────────────────────────────────── -->
+  <section class="section" id="faq" aria-labelledby="faq-heading">
+    <div class="container faq-wrap">
+      <p class="smallcaps">FAQ</p>
+      <h2 id="faq-heading" class="serif faq-title">Questions</h2>
+
+      <div class="faq-list">
+        <details class="faq-item">
+          <summary>What can I do here?</summary>
+          <p>Browse a project group, submit an order once, and receive that project's commission in your wallet.</p>
+        </details>
+        <details class="faq-item">
+          <summary>How does the welcome bonus work?</summary>
+          <p>AED 100 is added to your wallet when you create an account.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Do referrals pay a commission?</summary>
+          <p>No. Your code only tracks who joined.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ─────────────────────────────────────────────── -->
+  <footer class="footer" aria-label="Site footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <a class="brand" href="index.html" aria-label="Emirates Properties home">
+            <img class="brand-logo" src="assets/logo-nobg.png" alt="Emirates Properties">
+          </a>
+        </div>
+        <div>
+          <h4>Platform</h4>
+          <a href="#projects">Projects</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="#faq">FAQ</a>
+          <a href="about.html">About</a>
+          <a href="terms.html">Terms &amp; Conditions</a>
+        </div>
+        <div>
+          <h4>Workspace</h4>
+          <a href="pages/dashboard.html">Dashboard</a>
+          <a href="pages/orders.html">Orders</a>
+          <a href="pages/wallet.html">Wallet</a>
+          <a href="pages/earnings.html">Earnings</a>
+        </div>
+        <div>
+          <h4>Account</h4>
+          <a href="pages/login.html">Log in</a>
+          <a href="pages/signup.html">Create account</a>
+          <a href="pages/profile.html">Profile</a>
+          <a href="../admin/login.html">Admin</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2015 Emirates Properties</span>
+      </div>
+    </div>
+  </footer>
+
+  <div class="toast" role="alert" aria-live="polite"></div>
+
+  <script src="assets/js/env.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+
+</html>
